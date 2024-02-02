@@ -12,12 +12,11 @@ import midi,plugins,ui
 
 RANDOMIZER_PAD = 20
 PARAMINFO_PAD = 21
+COPY_PAD = 22
+PASTE_PAD = 23
 _SEED = 0
 _LOCK_D = dict()
 _IGNORE_NONAMES = True
-channelrack_is_selected = lambda:ui.getFocused(0)
-mixer_is_selected = lambda:ui.getFocused(1)
-effect_is_selected = lambda:ui.getFocused(6)
 generator_is_selected = lambda:ui.getFocused(7)
 
 def setrandomizerpad(n):
@@ -82,12 +81,15 @@ Ignore No-name parameters:{_IGNORE_NONAMES}
     or to change it back, use ignorenonames(True)
     """)
     print("-"*40)
+
 def isnoname(name):
     if any(((not len(name)),
             name.startswith("MIDI CC #"),
             name.startswith("MIDI Channel "))):
         return True
     return False
+
+tempdict = dict()
 
 def OnMidiMsg(event):
     global _SEED
@@ -117,6 +119,7 @@ def OnMidiMsg(event):
                             plugins.setParamValue(r,i,f_id)
                             print("randomized:",paramname)
                 event.handled = True
+
             elif event.data1 == PARAMINFO_PAD:
                 f_id = ui.getFocusedFormID()
                 if generator_is_selected():
@@ -127,5 +130,49 @@ def OnMidiMsg(event):
                         for i in range(L):
                             paramname = plugins.getParamName(i,f_id)
                             print(["","*"][isnoname(paramname)],i,paramname)
+                event.handled = True
+
+            elif event.data1 == COPY_PAD:
+                print("Copy")
+                f_id = ui.getFocusedFormID()
+                if generator_is_selected():
+                    if plugins.isValid(f_id):
+                        tempdict.clear()
+                        name = plugins.getPluginName(f_id,-1,1)
+                        L = plugins.getParamCount(f_id)
+                        params = set(list(range(L)))
+                        if name in _LOCK_D:
+                            for p in _LOCK_D[name]:
+                                if p in params:
+                                    params.remove(p)
+                        for i in params:
+                            paramname = plugins.getParamName(i,f_id)
+                            if _IGNORE_NONAMES and isnoname(paramname):
+                                continue
+                            val = plugins.getParamValue(i,f_id)
+                            tempdict[i] = val
+                        print("tempdict:",tempdict)
+                event.handled = True
+
+            elif event.data1 == PASTE_PAD:
+                print("Paste")
+                f_id = ui.getFocusedFormID()
+                if generator_is_selected():
+                    if plugins.isValid(f_id):
+                        name = plugins.getPluginName(f_id,-1,1)
+                        L = plugins.getParamCount(f_id)
+                        params = set(list(range(L)))
+                        if name in _LOCK_D:
+                            for p in _LOCK_D[name]:
+                                if p in params:
+                                    params.remove(p)
+                        for i in params:
+                            paramname = plugins.getParamName(i,f_id)
+                            if _IGNORE_NONAMES and isnoname(paramname):
+                                continue
+                            val = tempdict.get(i,None)
+                            if val == None:
+                                continue
+                            plugins.setParamValue(val,i,f_id)
                 event.handled = True
 
